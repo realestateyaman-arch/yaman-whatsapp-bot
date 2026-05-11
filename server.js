@@ -1,72 +1,86 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const config = require('./config.json');
-const Anthropic = require('@anthropic-ai/sdk');
-const express = require('express');
+const { Anthropic } = require('@anthropic-ai/sdk');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
+// 1. شغل Claude
 const anthropic = new Anthropic({
-  apiKey: process.env.CLAUDE_API_KEY
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// 2. شغل واتساب مع الحل تبع Render
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ],
     }
 });
 
+// 3. بس يجهز QR اطبعو بالـ Logs
 client.on('qr', qr => {
-    console.log('=== SCAN THIS QR CODE ===');
-    qrcode.generate(qr, {small: true});
-    console.log('=== QR END ===');
+    console.log('Scan this QR Code to link WhatsApp:');
+    qrcode.generate(qr, { small: true });
 });
 
+// 4. بس يشبك
 client.on('ready', () => {
-    console.log('WhatsApp Connected - yaman real estate ready');
+    console.log('Client is ready! البوت شغال ✅');
 });
 
+// 5. بس توصلك رسالة
 client.on('message', async msg => {
-    if (msg.fromMe) return;
+    console.log('Message received:', msg.body);
 
-    const today = new Date().toLocaleDateString('ar-LB', { weekday: 'long' });
-    if (today === process.env.DAY_OFF) {
-        await msg.reply(`عذراً نحن اليوم ${process.env.DAY_OFF} عطلة. منرجع نخدمك بكرا من ${config.working_hours.start}. للطوارئ: ${config.phone}`);
-        return;
-    }
-
-    const systemPrompt = `انت ${config.bot_name} من ${config.company_name} بـ ${config.address}.
-    خدماتك: ${config.services.join('، ')}.
-    دوامك: ${config.working_hours.days.join('، ')} من ${config.working_hours.start} للـ ${config.working_hours.end}.
-    رقم التواصل: ${config.phone}
-    هدفك: تحجز موعد كشف عقاري خلال ${config.booking_duration_minutes} دقيقة.
-    اسأل عن: نوع الخدمة، الميزانية، المنطقة، الموعد المناسب.
-    رد باللهجة اللبنانية، محترم ومختصر. سؤال واحد كل مرة.`;
+    // تجاهل رسايلك انت والجروبات
+    if (msg.fromMe || msg.from.includes('@g.us')) return;
 
     try {
-        const completion = await anthropic.messages.create({
+        // ابعت للعميل "عم يكتب..."
+        const chat = await msg.getChat();
+        chat.sendStateTyping();
+
+        // اسأل Claude
+        const response = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20241022",
             max_tokens: 300,
-            system: systemPrompt,
-            messages: [{role: "user", content: msg.body}],
+            system: "انت موظف مبيعات عند Yaman Real Estate. جاوب باحتراف واختصار باللهجة اللبنانية. اسأل عن الميزانية والمنطقة والمساحة. لا تعطي وعود كاذبة.",
+            messages: [{
+                role: "user",
+                content: msg.body
+            }]
         });
-        await msg.reply(completion.content[0].text);
+
+        const reply = response.content[0].text;
+
+        // رد على الزبون
+        msg.reply(reply);
+
     } catch (error) {
-        console.log('Error:', error);
-        await msg.reply('صار خطأ. تواصل معنا: ' + config.phone);
+        console.error('Error:', error);
+        msg.reply('عذراً صار خطأ تقني. فيك تتواصل مع يمان دغري على 76088855');
     }
 });
 
+// 6. شغل البوت
+client.initialize();
+
+// 7. عشان Render ما يفكر السيرفر واقع
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
 app.get('/', (req, res) => {
-    res.send('yaman real estate bot is running ✅');
+    res.send('Yaman WhatsApp Bot is running ✅');
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on ${PORT}`);
-    client.initialize();
+    console.log(`Server running on port ${PORT}`);
 });
-
-module.exports = app;
