@@ -1,8 +1,11 @@
 {
   "name": "yaman-whatsapp-bot",
   "version": "1.0.0",
-  "description": "WhatsApp Bot for Yaman Real Estate Lebanon",
+  "description": "Yaman Real Estate WhatsApp Bot",
   "main": "server.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node server.js"
   },
@@ -12,8 +15,5 @@
     "@anthropic-ai/sdk": "^0.27.3",
     "express": "^4.19.2",
     "puppeteer": "^23.0.0"
-  },
-  "engines": {
-    "node": "18.x"
   }
 }
